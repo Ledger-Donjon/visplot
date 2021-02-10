@@ -148,20 +148,24 @@ class plot:
     def on_mouse_press(self, event):
         self.init_x, self.init_y = event.pos
 
-    
     def on_mouse_move(self,event):
         if self.shift_pressed == True:
             if len(self.selected_lines) > 0:
-                x,_ = event.pos
-                delta_x = x - self.init_x
+                # map to screen displacement
+                tr = self.canvas.scene.node_transform(self.view.scene)
+                x,_,_,_ = tr.map(event.pos)
+                init_x,_,_,_ = tr.map([self.init_x, self.init_y])
+                delta_x = int(x - init_x)
                 for l in self.selected_lines:
                     self.line.pos[l][:,1] = np.roll(self.line.pos[l][:,1],delta_x)
                 self.init_x, self.init_y = event.pos
-                # I refresh the color to force a refresh of the display.
-                self.line.set_data(color=self.colors)            # Update colors
-
+                self.canvas.update()
 
     def on_mouse_release(self, event):
+        ## ignore release when moving traces
+        if self.shift_pressed:
+            return
+
         x,y = event.pos
 
         # if released more than 3 pixels away from click (i.e. dragging), ignore
