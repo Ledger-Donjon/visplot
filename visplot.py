@@ -97,11 +97,14 @@ class plot:
         self.view.camera.set_range(x=(-1, size), y=(curves.min(), curves.max()))
 
         self.ctrl_pressed = False 
+        self.shift_pressed = False 
         self.canvas.connect(self.on_key_press)
         self.canvas.connect(self.on_key_release)
         self.canvas.connect(self.on_mouse_press)
         self.canvas.connect(self.on_mouse_release)
 
+        self.canvas.connect(self.on_mouse_move)
+        
         self.canvas.show()
         if parent is None:
             self.canvas.app.run()
@@ -133,13 +136,30 @@ class plot:
     def on_key_press(self, event):
         if event.key == 'Control':
             self.ctrl_pressed = True
+        if event.key == 'Shift':
+            self.shift_pressed = True
 
     def on_key_release(self, event):
         if event.key == 'Control':
             self.ctrl_pressed = False 
+        if event.key == 'Shift':
+            self.shift_pressed = False 
 
     def on_mouse_press(self, event):
         self.init_x, self.init_y = event.pos
+
+    
+    def on_mouse_move(self,event):
+        if self.shift_pressed == True:
+            if len(self.selected_lines) > 0:
+                x,_ = event.pos
+                delta_x = x - self.init_x
+                for l in self.selected_lines:
+                    self.line.pos[l][:,1] = np.roll(self.line.pos[l][:,1],delta_x)
+                self.init_x, self.init_y = event.pos
+                # I refresh the color to force a refresh of the display.
+                self.line.set_data(color=self.colors)            # Update colors
+
 
     def on_mouse_release(self, event):
         x,y = event.pos
