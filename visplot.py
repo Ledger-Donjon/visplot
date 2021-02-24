@@ -39,7 +39,7 @@ class plot:
         self.shape_ = curves.shape
 
         if labels is not None:
-            assert len(self.labels) == self.shape_[0]
+            assert len(labels) == self.shape_[0]
             self.labels = labels
         else:
             self.labels = [f"0x{i:x}" for i in range(self.shape_[0])]
