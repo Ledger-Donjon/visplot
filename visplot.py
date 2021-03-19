@@ -184,7 +184,7 @@ class plot:
             self.single_select(closest_line)
                 
     def _add_label(self, curve_index, new_color):
-        new_label = scene.Text(f"{self.labels[curve_index]}", color=new_color, parent=self.canvas.scene)
+        new_label = scene.Text(f"{self.labels[curve_index]}", color=new_color, anchor_x = 'left', parent=self.canvas.scene)
         new_label.pos = self.LBL_POS_DEFAULTX, self.LBL_POS_DEFAULTY + self.LBL_SPACING * len(self.hl_labels)
         self.hl_labels.append((curve_index, new_label))
 
