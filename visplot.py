@@ -17,7 +17,7 @@ class plot:
     LBL_SPACING = 16 
 
     def __init__(
-        self, icurves, labels=None, clrmap="husl", parent=None
+        self, curves=None, labels=None, bgcolor=BG_DARK, parent=None, dontrun=False
     ):
         """ 
         :param icurves: input curve or list of curves
@@ -27,14 +27,40 @@ class plot:
             size=(1280, 900),
             position=(200, 200),
             keys="interactive",
-            bgcolor=self.BG_DARK,
+            bgcolor=bgcolor,
             parent=parent,
         )
 
         self.grid = self.canvas.central_widget.add_grid(spacing=0)
         self.view = self.grid.add_view(row=0, col=1, camera="panzoom")
 
-        curves = np.array(icurves)
+        self.x_axis = scene.AxisWidget(orientation="bottom")
+        self.y_axis = scene.AxisWidget(orientation="left")
+        self.x_axis.stretch = (1, 0.05)
+        self.y_axis.stretch = (0.05, 1)
+        self.grid.add_widget(self.x_axis, row=1, col=1)
+        self.grid.add_widget(self.y_axis, row=0, col=0)
+        self.x_axis.link_view(self.view)
+        self.y_axis.link_view(self.view)
+
+        self.ctrl_pressed = False 
+        self.shift_pressed = False 
+        self.canvas.connect(self.on_key_press)
+        self.canvas.connect(self.on_key_release)
+        self.canvas.connect(self.on_mouse_press)
+        self.canvas.connect(self.on_mouse_release)
+
+        self.canvas.connect(self.on_mouse_move)
+        
+        if curves is not None:
+            self.draw_curves(curves, labels)
+
+        self.canvas.show()
+        if parent is None and dontrun is False:
+            self.canvas.app.run()
+
+    def draw_curves(self, curves_, labels=None, clrmap="husl"):
+        curves = np.array(curves_)
 
         self.shape_ = curves.shape
 
@@ -46,7 +72,7 @@ class plot:
 
         if len(curves.shape) == 1:
             ## Single curve
-            curves = np.array([icurves])
+            curves = np.array([curves])
 
         nb_traces, size = curves.shape
 
@@ -85,29 +111,10 @@ class plot:
         self.hl_labels = []
         self.hl_colorset = cycle(color.get_colormap(clrmap)[np.linspace(0.0, 1.0, self.MAX_HL)])
 
-        self.x_axis = scene.AxisWidget(orientation="bottom")
-        self.y_axis = scene.AxisWidget(orientation="left")
-        self.x_axis.stretch = (1, 0.05)
-        self.y_axis.stretch = (0.05, 1)
-        self.grid.add_widget(self.x_axis, row=1, col=1)
-        self.grid.add_widget(self.y_axis, row=0, col=0)
-        self.x_axis.link_view(self.view)
-        self.y_axis.link_view(self.view)
-
         self.view.camera.set_range(x=(-1, size), y=(curves.min(), curves.max()))
 
-        self.ctrl_pressed = False 
-        self.shift_pressed = False 
-        self.canvas.connect(self.on_key_press)
-        self.canvas.connect(self.on_key_release)
-        self.canvas.connect(self.on_mouse_press)
-        self.canvas.connect(self.on_mouse_release)
-
-        self.canvas.connect(self.on_mouse_move)
-        
-        self.canvas.show()
-        if parent is None:
-            self.canvas.app.run()
+    def run(self):
+        self.canvas.app.run()
 
     def find_closest_line(self, x, y):
         # rx is the 'real x', which is an int
@@ -250,4 +257,7 @@ class plot:
 if __name__ == "__main__":
     N = 50
     a = [i/10*np.sin(np.linspace(0.0+i/10,10.0+i/10,num=2000)) for i in range(N)]
-    v = plot(a)
+    v = plot(a, dontrun=True)
+    v.multiple_select(4)
+    v.multiple_select(7)
+    v.run()
