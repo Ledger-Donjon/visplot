@@ -117,27 +117,39 @@ class plot:
         self.canvas.app.run()
 
     def find_closest_line(self, x, y):
-        # rx is the 'real x', which is an int
-        rx = int(round(x))
+        radius = 50
 
-        # Gather all segments within 2*N coordinates
-        radius = 10
+        tr = self.canvas.scene.node_transform(self.view.scene)
+        # Canvas coordinates of clicked point
+        x1,y1,_,_ = tr.map((x,y))
+        # Canvas coordinates of upper right corner of bounding box
+        # containing clicked point
+        x2,max_y,_,_ = tr.map((x+radius,y+radius))
+
+        _,min_y,_,_ = tr.map((x, y-radius))
+        min_y, max_y = min(min_y, max_y), max(min_y, max_y)
+
+        # Gather all segments left and right of the clicked point
+        rx = int(round(x1))
         tab = self.line.pos[:,rx-radius:rx+radius]
 
-        f = np.array([x,y], dtype=np.float32)
-        rmin = 100 
-        imin = 0
-
-        # Compute distance from click to all lines in the
-        # vertical 20 pixels-wide segment around click 
+        # Find closest point, filtering out points whose 
+        # y-coordinate is outside the bounding box around
+        # the clicked point
+        max_norm = 1000000 
+        imin = None 
+        f = np.array([x1,y1], dtype=np.float32)
         for i,s in enumerate(tab):
             for p in s:
-                t = np.linalg.norm(p-f)
-                if t < rmin:
-                    rmin = t
-                    imin = i
-        
+                if min_y<p[1]<max_y:
+                    t = np.linalg.norm(f-p)
+                    if t < max_norm:
+                        max_norm = t
+                        imin = i
+
         # this is the index of the closest line
+        # or None if there are no point in the
+        # defined area
         return imin 
 
     def on_key_press(self, event):
@@ -179,11 +191,9 @@ class plot:
         if not (abs(x-self.init_x)<3 and abs(y-self.init_y)<3):
             return
 
-        # Find out actual coordinates in the graph
-        tr = self.canvas.scene.node_transform(self.view.scene)
-        x,y,_,_ = tr.map(event.pos)
-
         closest_line = self.find_closest_line(x,y)
+        if closest_line is None:
+            return
 
         if self.ctrl_pressed:
             self.multiple_select(closest_line)
