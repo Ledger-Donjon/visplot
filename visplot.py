@@ -31,6 +31,8 @@ class plot:
             parent=parent,
         )
 
+        self.line = None
+
         self.grid = self.canvas.central_widget.add_grid(spacing=0)
         self.view = self.grid.add_view(row=0, col=1, camera="panzoom")
 
@@ -58,6 +60,12 @@ class plot:
         self.canvas.show()
         if parent is None and dontrun is False:
             self.canvas.app.run()
+
+    def clear(self):
+        if self.line is not None:
+            self.line.parent = None
+        self.selected_lines = [] 
+        self.hl_labels = []
 
     def draw_curves(self, curves_, labels=None, clrmap="husl"):
         curves = np.array(curves_)
