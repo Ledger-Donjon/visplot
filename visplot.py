@@ -32,6 +32,7 @@ class plot:
         )
 
         self.line = None
+        self.rulers = []
 
         self.grid = self.canvas.central_widget.add_grid(spacing=0)
         self.view = self.grid.add_view(row=0, col=1, camera="panzoom")
@@ -272,10 +273,29 @@ class plot:
         
         self.line.set_data(color=self.colors)
 
+    def add_horizontal_ruler(self, y: float):
+        """ Add a single light grey horizontal line at 'y' on the canvas. """
+        _, size = self.shape_
+        line = np.dstack((np.arange(size), np.repeat(np.float32(y), size)))
+        self.rulers += [scene.Line(line, color=color.Color("#ddd", alpha=0.8), parent=self.view.scene)]
+
+    def add_horizontal_band(self, y0: float, y1: float):
+        """ Add a horizontal band (rectangle) covering 'y0' to 'y1' on the canvas. """
+        _, size = self.shape_
+        coords = [
+            (0, y0),
+            (0, y1),
+            (size, y1),
+            (size, y0)
+        ]
+        self.zone = scene.visuals.Polygon(coords, color=color.Color('#ddd', alpha=0.1), parent=self.view.scene)
+
 if __name__ == "__main__":
     N = 50
     a = [i/10*np.sin(np.linspace(0.0+i/10,10.0+i/10,num=2000)) for i in range(N)]
     v = plot(a, dontrun=True)
     v.multiple_select(4)
     v.multiple_select(7)
+    v.add_horizontal_ruler(2.2)
+    v.add_horizontal_band(1., -1.)
     v.run()
