@@ -272,11 +272,14 @@ class plot:
         
         self.line.set_data(color=self.colors)
 
-    def add_horizontal_ruler(self, y: float) -> scene.Line:
-        """ Add a single light grey horizontal line at 'y' on the canvas. """
-        _, size = self.shape_
-        line = np.dstack((np.arange(size), np.repeat(np.float32(y), size)))
-        scene.Line(line, color=color.Color("#ddd", alpha=0.8), parent=self.view.scene)
+    def add_horizontal_ruler(self, y: float) -> scene.visuals.InfiniteLine:
+        """Add a single light grey horizontal line at 'y' on the canvas."""
+        return scene.visuals.InfiniteLine(
+            pos=float(y),
+            color=color.Color("#ddd", alpha=0.8).rgba,
+            parent=self.view.scene,
+            vertical=False,
+        )
 
     def add_horizontal_band(self, y0: float, y1: float) -> scene.visuals.Polygon:
         """ Add a horizontal band (rectangle) covering 'y0' to 'y1' on the canvas. """
@@ -287,7 +290,7 @@ class plot:
             (size, y1),
             (size, y0)
         ]
-        scene.visuals.Polygon(coords, color=color.Color('#ddd', alpha=0.1), parent=self.view.scene)
+        return scene.visuals.Polygon(coords, color=color.Color('#ddd', alpha=0.1), parent=self.view.scene)
 
 if __name__ == "__main__":
     N = 50
