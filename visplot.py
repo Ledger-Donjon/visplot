@@ -292,6 +292,15 @@ class plot:
         ]
         return scene.visuals.Polygon(coords, color=color.Color('#ddd', alpha=0.1), parent=self.view.scene)
 
+    def add_vertical_ruler(self, x: float) -> scene.visuals.InfiniteLine:
+        """Add a single light grey vertical line at position 'x' on the canvas."""
+        return scene.visuals.InfiniteLine(
+            pos=float(x),
+            color=color.Color("#ddd", alpha=0.8).rgba,
+            parent=self.view.scene,
+            vertical=True,
+        )
+
 if __name__ == "__main__":
     N = 50
     a = [i/10*np.sin(np.linspace(0.0+i/10,10.0+i/10,num=2000)) for i in range(N)]
@@ -300,4 +309,5 @@ if __name__ == "__main__":
     v.multiple_select(7)
     v.add_horizontal_ruler(2.2)
     v.add_horizontal_band(1., -1.)
+    v.add_vertical_ruler(10)
     v.run()
