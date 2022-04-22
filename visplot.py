@@ -34,7 +34,6 @@ class plot:
         self.line = None
 
         self.grid = self.canvas.central_widget.add_grid(spacing=0)
-        self.view = self.grid.add_view(row=0, col=1, camera="panzoom")
 
         self.x_axis = scene.AxisWidget(orientation="bottom")
         self.y_axis = scene.AxisWidget(orientation="left")
@@ -42,6 +41,7 @@ class plot:
         self.y_axis.stretch = (0.05, 1)
         self.grid.add_widget(self.x_axis, row=1, col=1)
         self.grid.add_widget(self.y_axis, row=0, col=0)
+        self.view = self.grid.add_view(row=0, col=1, camera="panzoom")
         self.x_axis.link_view(self.view)
         self.y_axis.link_view(self.view)
 
