@@ -179,6 +179,16 @@ class plot:
     def on_mouse_press(self, event):
         self._init_pos = event.pos
 
+    def apply_offset(self, curve_no: int, offset: Tuple[float, float]):
+        """
+        Moves the curve for a given (x, y) offset.
+        :param curve_no: The curve identifier to apply the offset
+        :param offset: The displacement to apply to the curve.
+        """
+        self.line.pos[curve_no][:,0] += offset[0]
+        self.line.pos[curve_no][:,1] += offset[1]
+        self.line.set_data(pos=self.line.pos)
+
     def on_mouse_move(self,event):
         if self.shift_pressed == True:
             if len(self.selected_lines) > 0:
@@ -189,8 +199,8 @@ class plot:
                 x,y,_,_ = tr.map(event.pos)
                 init_x,init_y,_,_ = tr.map(self._init_pos)
                 delta_x = int(x - init_x)
-                for l in self.selected_lines:
-                    self.line.pos[l][:,1] = np.roll(self.line.pos[l][:,1],delta_x)
+                for curve_no in self.selected_lines:
+                    self.apply_offset(curve_no, (delta_x, 0.0))
                 self._init_pos = event.pos
                 self.canvas.update()
 
