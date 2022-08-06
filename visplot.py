@@ -181,6 +181,23 @@ class plot:
     def on_mouse_press(self, event):
         self._init_pos = event.pos
 
+    def restore_offset(self, curves: Optional[int] = None):
+        """
+        Replace the curves to their initial place, i.e. removes the cumulative offset previously
+        applied on them.
+        :param curves: The curves' number to reset the offset. If None, uses the selected curves. If
+        no curves are selected, restores all the offsets for all curves.
+        """
+        if curves is None:
+            curves = self.selected_lines
+            if len(curves) == 0:
+                curves = list(self.lines_offset.keys())
+        for line_no in curves:
+            if line_no in self.lines_offset:
+                offset = self.lines_offset[line_no]
+                self.apply_offset(line_no, (-offset[0], -offset[1]))
+                del self.lines_offset[line_no]
+
     def apply_offset(self, curve_no: int, offset: Tuple[float, float]):
         """
         Moves the curve for a given (x, y) offset.
