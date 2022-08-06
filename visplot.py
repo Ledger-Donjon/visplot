@@ -48,6 +48,8 @@ class plot:
 
         self.ctrl_pressed = False 
         self.shift_pressed = False 
+        self.alt_pressed = False
+
         self.canvas.connect(self.on_key_press)
         self.canvas.connect(self.on_key_release)
         self.canvas.connect(self.on_mouse_press)
@@ -171,12 +173,16 @@ class plot:
         if event.key == 'Shift':
             self.shift_pressed = True
             self._init_pos = None
+        if event.key == 'Alt':
+            self.alt_pressed = True
 
     def on_key_release(self, event):
         if event.key == 'Control':
             self.ctrl_pressed = False 
         if event.key == 'Shift':
             self.shift_pressed = False 
+        if event.key == 'Alt':
+            self.alt_pressed = False
 
     def on_mouse_press(self, event):
         self._init_pos = event.pos
@@ -212,7 +218,7 @@ class plot:
         self.lines_offset[curve_no] = [offset[0] + curve_offset[0], offset[1] + curve_offset[1]]
 
     def on_mouse_move(self,event):
-        if self.shift_pressed == True:
+        if self.shift_pressed:
             if len(self.selected_lines) > 0:
                 if self._init_pos is None:
                     self._init_pos = event.pos
@@ -220,9 +226,11 @@ class plot:
                 tr = self.canvas.scene.node_transform(self.view.scene)
                 x,y,_,_ = tr.map(event.pos)
                 init_x,init_y,_,_ = tr.map(self._init_pos)
-                delta_x = int(x - init_x)
+                delta_x = x - init_x
+                delta_y = y - init_y
                 for curve_no in self.selected_lines:
-                    self.apply_offset(curve_no, (delta_x, 0.0))
+                    self.apply_offset(curve_no,
+                                      (0.0, delta_y) if self.alt_pressed else (delta_x, 0.0))
                 self._init_pos = event.pos
                 self.canvas.update()
 
