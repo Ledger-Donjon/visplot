@@ -119,6 +119,8 @@ class plot:
         self.line = scene.Line(pos=xy_curves, color=self.colors, parent=self.view.scene, connect=connect)
 
         self.selected_lines = [] 
+        # To store the lines offsets applied with the "shift"
+        self.lines_offset = {}
         self.hl_labels = []
         self.hl_colorset = cycle(color.get_colormap(clrmap)[np.linspace(0.0, 1.0, self.MAX_HL)])
 
@@ -182,12 +184,15 @@ class plot:
     def apply_offset(self, curve_no: int, offset: Tuple[float, float]):
         """
         Moves the curve for a given (x, y) offset.
+        The cumulative offset is stored in internal dictionary in order to be possibly restored.
         :param curve_no: The curve identifier to apply the offset
         :param offset: The displacement to apply to the curve.
         """
         self.line.pos[curve_no][:,0] += offset[0]
         self.line.pos[curve_no][:,1] += offset[1]
         self.line.set_data(pos=self.line.pos)
+        curve_offset = self.lines_offset.get(curve_no, [0.0, 0.0])
+        self.lines_offset[curve_no] = [offset[0] + curve_offset[0], offset[1] + curve_offset[1]]
 
     def on_mouse_move(self,event):
         if self.shift_pressed == True:
