@@ -1,5 +1,6 @@
 
 from itertools import cycle
+from typing import Optional, Tuple
 import numpy as np
 from vispy import scene
 from vispy import color
@@ -52,6 +53,8 @@ class plot:
         self.canvas.connect(self.on_mouse_press)
         self.canvas.connect(self.on_mouse_release)
 
+        # This value stores the mouse position between calls of mouse move as a tuple
+        self._init_pos: Optional[Tuple[int, int]] = None
         self.canvas.connect(self.on_mouse_move)
         
         if curves is not None:
@@ -165,6 +168,7 @@ class plot:
             self.ctrl_pressed = True
         if event.key == 'Shift':
             self.shift_pressed = True
+            self._init_pos = None
 
     def on_key_release(self, event):
         if event.key == 'Control':
@@ -173,19 +177,21 @@ class plot:
             self.shift_pressed = False 
 
     def on_mouse_press(self, event):
-        self.init_x, self.init_y = event.pos
+        self._init_pos = event.pos
 
     def on_mouse_move(self,event):
         if self.shift_pressed == True:
             if len(self.selected_lines) > 0:
+                if self._init_pos is None:
+                    self._init_pos = event.pos
                 # map to screen displacement
                 tr = self.canvas.scene.node_transform(self.view.scene)
-                x,_,_,_ = tr.map(event.pos)
-                init_x,_,_,_ = tr.map([self.init_x, self.init_y])
+                x,y,_,_ = tr.map(event.pos)
+                init_x,init_y,_,_ = tr.map(self._init_pos)
                 delta_x = int(x - init_x)
                 for l in self.selected_lines:
                     self.line.pos[l][:,1] = np.roll(self.line.pos[l][:,1],delta_x)
-                self.init_x, self.init_y = event.pos
+                self._init_pos = event.pos
                 self.canvas.update()
 
     def on_mouse_release(self, event):
@@ -196,7 +202,7 @@ class plot:
         x,y = event.pos
 
         # if released more than 3 pixels away from click (i.e. dragging), ignore
-        if not (abs(x-self.init_x)<3 and abs(y-self.init_y)<3):
+        if not (abs(x-self._init_pos[0])<3 and abs(y-self._init_pos[1])<3):
             return
 
         closest_line = self.find_closest_line(x,y)
