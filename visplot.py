@@ -1,5 +1,6 @@
 
 from itertools import cycle
+from typing import Optional, Tuple
 import numpy as np
 from vispy import scene
 from vispy import color
@@ -47,11 +48,15 @@ class plot:
 
         self.ctrl_pressed = False 
         self.shift_pressed = False 
+        self.alt_pressed = False
+
         self.canvas.connect(self.on_key_press)
         self.canvas.connect(self.on_key_release)
         self.canvas.connect(self.on_mouse_press)
         self.canvas.connect(self.on_mouse_release)
 
+        # This value stores the mouse position between calls of mouse move as a tuple
+        self._init_pos: Optional[Tuple[int, int]] = None
         self.canvas.connect(self.on_mouse_move)
         
         if curves is not None:
@@ -116,6 +121,8 @@ class plot:
         self.line = scene.Line(pos=xy_curves, color=self.colors, parent=self.view.scene, connect=connect)
 
         self.selected_lines = [] 
+        # To store the lines offsets applied with the "shift"
+        self.lines_offset = {}
         self.hl_labels = []
         self.hl_colorset = cycle(color.get_colormap(clrmap)[np.linspace(0.0, 1.0, self.MAX_HL)])
 
@@ -165,27 +172,66 @@ class plot:
             self.ctrl_pressed = True
         if event.key == 'Shift':
             self.shift_pressed = True
+            self._init_pos = None
+        if event.key == 'Alt':
+            self.alt_pressed = True
 
     def on_key_release(self, event):
         if event.key == 'Control':
             self.ctrl_pressed = False 
         if event.key == 'Shift':
             self.shift_pressed = False 
+        if event.key == 'Alt':
+            self.alt_pressed = False
 
     def on_mouse_press(self, event):
-        self.init_x, self.init_y = event.pos
+        self._init_pos = event.pos
+
+    def restore_offset(self, curves: Optional[int] = None):
+        """
+        Replace the curves to their initial place, i.e. removes the cumulative offset previously
+        applied on them.
+        :param curves: The curves' number to reset the offset. If None, uses the selected curves. If
+        no curves are selected, restores all the offsets for all curves.
+        """
+        if curves is None:
+            curves = self.selected_lines
+            if len(curves) == 0:
+                curves = list(self.lines_offset.keys())
+        for line_no in curves:
+            if line_no in self.lines_offset:
+                offset = self.lines_offset[line_no]
+                self.apply_offset(line_no, (-offset[0], -offset[1]))
+                del self.lines_offset[line_no]
+
+    def apply_offset(self, curve_no: int, offset: Tuple[float, float]):
+        """
+        Moves the curve for a given (x, y) offset.
+        The cumulative offset is stored in internal dictionary in order to be possibly restored.
+        :param curve_no: The curve identifier to apply the offset
+        :param offset: The displacement to apply to the curve.
+        """
+        self.line.pos[curve_no][:,0] += offset[0]
+        self.line.pos[curve_no][:,1] += offset[1]
+        self.line.set_data(pos=self.line.pos)
+        curve_offset = self.lines_offset.get(curve_no, [0.0, 0.0])
+        self.lines_offset[curve_no] = [offset[0] + curve_offset[0], offset[1] + curve_offset[1]]
 
     def on_mouse_move(self,event):
-        if self.shift_pressed == True:
+        if self.shift_pressed:
             if len(self.selected_lines) > 0:
+                if self._init_pos is None:
+                    self._init_pos = event.pos
                 # map to screen displacement
                 tr = self.canvas.scene.node_transform(self.view.scene)
-                x,_,_,_ = tr.map(event.pos)
-                init_x,_,_,_ = tr.map([self.init_x, self.init_y])
-                delta_x = int(x - init_x)
-                for l in self.selected_lines:
-                    self.line.pos[l][:,1] = np.roll(self.line.pos[l][:,1],delta_x)
-                self.init_x, self.init_y = event.pos
+                x,y,_,_ = tr.map(event.pos)
+                init_x,init_y,_,_ = tr.map(self._init_pos)
+                delta_x = x - init_x
+                delta_y = y - init_y
+                for curve_no in self.selected_lines:
+                    self.apply_offset(curve_no,
+                                      (0.0, delta_y) if self.alt_pressed else (delta_x, 0.0))
+                self._init_pos = event.pos
                 self.canvas.update()
 
     def on_mouse_release(self, event):
@@ -196,7 +242,7 @@ class plot:
         x,y = event.pos
 
         # if released more than 3 pixels away from click (i.e. dragging), ignore
-        if not (abs(x-self.init_x)<3 and abs(y-self.init_y)<3):
+        if not (abs(x-self._init_pos[0])<3 and abs(y-self._init_pos[1])<3):
             return
 
         closest_line = self.find_closest_line(x,y)
