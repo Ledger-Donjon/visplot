@@ -1,9 +1,9 @@
 from itertools import cycle
 from typing import Optional, Tuple
 import numpy as np
+from PyQt5 import QtWidgets as qt
 from vispy import scene
 from vispy import color
-from vispy import util
 
 
 class plot:
@@ -18,7 +18,13 @@ class plot:
     LBL_SPACING = 16
 
     def __init__(
-        self, curves=None, labels=None, bgcolor=BG_DARK, parent=None, dontrun=False
+        self,
+        curves=None,
+        labels=None,
+        bgcolor=BG_DARK,
+        parent=None,
+        dontrun=False,
+        no_controls=False,
     ):
         """
         :param icurves: input curve or list of curves
@@ -50,15 +56,16 @@ class plot:
         self.shift_pressed = False
         self.alt_pressed = False
 
-        self.canvas.connect(self.on_key_press)
-        self.canvas.connect(self.on_key_release)
-        self.canvas.connect(self.on_mouse_press)
-        self.canvas.connect(self.on_mouse_release)
-
+        if not no_controls:
+            self.canvas.connect(self.on_key_press)
+            self.canvas.connect(self.on_key_release)
+            self.canvas.connect(self.on_mouse_press)
+            self.canvas.connect(self.on_mouse_release)
+            self.canvas.connect(self.on_mouse_move)
+        
         # This value stores the mouse position between calls of mouse move as a tuple
         self._init_pos: Optional[Tuple[int, int]] = None
-        self.canvas.connect(self.on_mouse_move)
-
+        
         if curves is not None:
             self.draw_curves(curves, labels)
 
@@ -155,7 +162,7 @@ class plot:
         # Find closest point, filtering out points whose
         # y-coordinate is outside the bounding box around
         # the clicked point
-        max_norm = 1000000
+        max_norm = 1_000_000
         imin = None
         f = np.array([x1, y1], dtype=np.float32)
         for i, s in enumerate(tab):
@@ -171,7 +178,7 @@ class plot:
         # defined area
         return imin
 
-    def on_key_press(self, event):
+    def _on_key_press(self, event):
         if event.key == "Control":
             self.ctrl_pressed = True
         if event.key == "Shift":
@@ -180,7 +187,10 @@ class plot:
         if event.key == "Alt":
             self.alt_pressed = True
 
-    def on_key_release(self, event):
+    def on_key_press(self, event):
+        return self._on_key_press(event)
+
+    def _on_key_release(self, event):
         if event.key == "Control":
             self.ctrl_pressed = False
         if event.key == "Shift":
@@ -188,8 +198,14 @@ class plot:
         if event.key == "Alt":
             self.alt_pressed = False
 
-    def on_mouse_press(self, event):
+    def on_key_release(self, event):
+        return self._on_key_release(event)
+
+    def _on_mouse_press(self, event):
         self._init_pos = event.pos
+
+    def on_mouse_press(self, event):
+        return self._on_mouse_press(event)
 
     def restore_offset(self, curves: Optional[int] = None):
         """
@@ -224,8 +240,8 @@ class plot:
             offset[1] + curve_offset[1],
         ]
 
-    def on_mouse_move(self, event):
-        if self.shift_pressed:
+    def _on_mouse_move(self, event):
+        if self.shift_pressed == True:
             if len(self.selected_lines) > 0:
                 if self._init_pos is None:
                     self._init_pos = event.pos
@@ -242,8 +258,11 @@ class plot:
                 self._init_pos = event.pos
                 self.canvas.update()
 
-    def on_mouse_release(self, event):
-        ## ignore release when moving traces
+    def on_mouse_move(self, event):
+        return self._on_mouse_move(event)
+
+    def _on_mouse_release(self, event):
+        # ignore release when moving traces
         if self.shift_pressed:
             return
 
@@ -253,15 +272,49 @@ class plot:
         if not (abs(x - self._init_pos[0]) < 3 and abs(y - self._init_pos[1]) < 3):
             return
 
-        closest_line = self.find_closest_line(x, y)
-        if closest_line is None:
-            return
+        if event.button == 1:
+            closest_line = self.find_closest_line(x, y)
+            if closest_line is None:
+                return
 
-        if self.ctrl_pressed:
-            self.multiple_select(closest_line)
-        else:
-            self.single_select(closest_line)
+            if self.ctrl_pressed:
+                self.multiple_select(closest_line)
+            else:
+                self.single_select(closest_line)
+        elif event.button == 2:
+            # save selected traces on right-click
+            self.save_traces_popup()
 
+    def save_traces_popup(self):
+        pt = qt.QLineEdit("", self.canvas.native)
+        pt.setPlaceholderText("Save traces as ...")
+        pt.show()
+        self.line_save = pt
+        # TODO: add a 'hasAcceptableInput'
+        pt.returnPressed.connect(self.save_traces)
+
+    def save_traces(self):
+        reshaped = self.line.pos[:, :, 1].reshape(self.shape_)
+        filename = self.line_save.text()
+        np.save(
+            filename + ".npy", reshaped 
+        )
+        print(f"Saved traces into {filename}.npy")
+        with open(filename + "_labels.txt", 'w') as out:
+            for label in self.labels:
+                print(label, file=out)
+
+        print(f"Saved labels into {filename}_labels.txt")
+        self.line_save.hide()
+
+    def on_mouse_release(self, event):
+        return self._on_mouse_release(event)
+
+    def get_trace_length(self):
+        if len(self.shape_) == 1:
+            return self.shape_[0]
+        return self.shape_[1]
+        
     def _add_label(self, curve_index, new_color):
         new_label = scene.Text(
             f"{self.labels[curve_index]}",
@@ -282,22 +335,21 @@ class plot:
 
         ## redraw text items
         for i, lbl in enumerate(self.hl_labels[idx:]):
-            lbl[
-                1
-            ].pos = self.LBL_POS_DEFAULTX, self.LBL_POS_DEFAULTY + self.LBL_SPACING * (
-                idx + i
+            lbl[1].pos = (
+                self.LBL_POS_DEFAULTX,
+                self.LBL_POS_DEFAULTY + self.LBL_SPACING * (idx + i),
             )
 
     def _find_label_from_curve_index(self, curve_index):
         return list(map(lambda x: x[0], self.hl_labels)).index(curve_index)
 
     def _set_curve_color(self, n, new_color):
-        _, S = self.shape_
+        S = self.get_trace_length()
         a = n * S
         self.colors[a : a + S] = np.repeat(new_color.rgb, S, axis=0)
 
     def _restore_nth_curve_color(self, n):
-        _, S = self.shape_
+        S = self.get_trace_length()
         nnx = n * S
         self.colors[nnx : nnx + S] = np.repeat([self.backup_colors[n]], S, axis=0)
 
@@ -366,6 +418,8 @@ class plot:
 
 
 if __name__ == "__main__":
+    import sys
+
     N = 50
     a = [
         i / 10 * np.sin(np.linspace(0.0 + i / 10, 10.0 + i / 10, num=2000))
