@@ -3,7 +3,6 @@ from typing import Optional, Tuple
 import numpy as np
 from vispy import scene
 from vispy import color
-from vispy import util
 
 
 class plot:
@@ -73,53 +72,73 @@ class plot:
         self.hl_labels = []
 
     def draw_curves(self, curves_, labels=None, clrmap="husl"):
-        curves = np.array(curves_)
+        if isinstance(curves_[0], int):
+            # assume single curve
+            curves_ = [curves_]
 
-        self.shape_ = curves.shape
-
-        if labels is not None:
-            assert len(labels) == self.shape_[0]
-            self.labels = labels
-        else:
-            self.labels = [f"0x{i:x}" for i in range(self.shape_[0])]
-
-        if len(curves.shape) == 1:
-            ## Single curve
-            curves = np.array([curves])
-
-        nb_traces, size = curves.shape
+        # keep an array of lengths
+        self.shapes = [len(curve) for curve in curves_]
 
         # the Line visual requires a vector of X,Y coordinates
-        xy_curves = np.dstack((np.tile(np.arange(size), (nb_traces, 1)), curves))
+        flat_curves = np.empty((0,2))
+        min_len = len(curves_[0])
+        max_len = 0
+        for curve_py in curves_:
+            curve = np.dstack((np.arange(len(curve_py)), np.array(curve_py)))[0]
+            length = len(curve)
+            if length < min_len:
+                min_len = length
+            if length > max_len:
+                max_len = length
+            flat_curves = np.concatenate((flat_curves, curve))
+
+        if labels is not None:
+            assert len(labels) == len(curves_)
+            self.labels = labels
+        else:
+            self.labels = [f"0x{i:x}" for i in range(len(curves_))]
 
         # Specify which points are connected
         # Start by connecting each point to its successor
-        connect = np.empty((nb_traces * size - 1, 2), np.int32)
-        connect[:, 0] = np.arange(nb_traces * size - 1)
+        connect = np.empty((flat_curves.shape[0] - 1, 2), np.int32)
+        connect[:, 0] = np.arange(flat_curves.shape[0] - 1)
         connect[:, 1] = connect[:, 0] + 1
 
         # Prevent vispy from drawing a line between the last point
         # of a curve and the first point of the next curve
-        for i in range(size, nb_traces * size, size):
-            connect[i - 1, 1] = i - 1
+        cur_x = len(curves_[0])
+        for curve in curves_[1:]:
+            connect[cur_x - 1, 1] = cur_x - 1
+            cur_x += len(curve)
+        connect[-1, 1] = flat_curves.shape[0] -1
 
-        self.colors = np.ones((nb_traces * size, 3), dtype=np.float32)
+        nb_traces = len(curves_)
+        total_size = len(flat_curves)
+        self.colors = np.ones((total_size, 3), dtype=np.float32)
         self.backup_colors = np.ones((nb_traces, 3), dtype=np.float32)
 
         R_p = np.linspace(0.4, 0.4, num=nb_traces)
         G_p = np.linspace(0.5, 0.3, num=nb_traces)
         B_p = np.linspace(0.5, 0.3, num=nb_traces)
 
-        self.colors[:, 0] = np.repeat(R_p, size)
-        self.colors[:, 1] = np.repeat(G_p, size)
-        self.colors[:, 2] = np.repeat(B_p, size)
+        cur_x = 0
+        for i,size in enumerate(self.shapes):
+            cslice = slice(cur_x,cur_x+size)
+            self.colors[cslice, 0] = R_p[i]
+            self.colors[cslice, 1] = G_p[i]
+            self.colors[cslice, 2] = B_p[i]
 
-        self.backup_colors[:, 0] = R_p
-        self.backup_colors[:, 1] = G_p
-        self.backup_colors[:, 2] = B_p
+            self.backup_colors[i, 0] = R_p[i]
+            self.backup_colors[i, 1] = G_p[i]
+            self.backup_colors[i, 2] = B_p[i]
+
+            cur_x += size
 
         self.line = scene.Line(
-            pos=xy_curves, color=self.colors, parent=self.view.scene, connect=connect
+            pos=flat_curves,
+            color=self.colors,
+            parent=self.view.scene,
+            connect=connect
         )
 
         self.selected_lines = []
@@ -130,46 +149,51 @@ class plot:
             color.get_colormap(clrmap)[np.linspace(0.0, 1.0, self.MAX_HL)]
         )
 
-        self.view.camera.set_range(x=(-1, size), y=(curves.min(), curves.max()))
+        self.view.camera.set_range(x=(-1, max_len), y=(flat_curves[:,1].min(), flat_curves[:,1].max()))
 
     def run(self):
         self.canvas.app.run()
 
     def find_closest_line(self, x, y):
-        radius = 50
+        # set bounding box where the points will be searched to be
+        # at most 1/ratio of the visible area
+        # XXX: cons: behaviour changes depending on the window size
+        ratio = 20
+        camera_state = self.view.camera.get_state()['rect']
+        bounding_x = camera_state.width / ratio
+        bounding_y = camera_state.height / ratio
 
         tr = self.canvas.scene.node_transform(self.view.scene)
         # Canvas coordinates of clicked point
         x1, y1, _, _ = tr.map((x, y))
-        # Canvas coordinates of upper right corner of bounding box
-        # containing clicked point
-        x2, max_y, _, _ = tr.map((x + radius, y + radius))
-
-        _, min_y, _, _ = tr.map((x, y - radius))
-        min_y, max_y = min(min_y, max_y), max(min_y, max_y)
-
-        # Gather all segments left and right of the clicked point
         rx = int(round(x1))
-        tab = self.line.pos[:, rx - radius : rx + radius]
+        rbx = int(bounding_x)
+        ref_point = np.array([x1, y1], dtype=np.float32)
+
+        def normf(p):
+            return np.linalg.norm(ref_point - p)
 
         # Find closest point, filtering out points whose
         # y-coordinate is outside the bounding box around
         # the clicked point
-        max_norm = 1000000
-        imin = None
-        f = np.array([x1, y1], dtype=np.float32)
-        for i, s in enumerate(tab):
-            for p in s:
-                if min_y < p[1] < max_y:
-                    t = np.linalg.norm(f - p)
-                    if t < max_norm:
-                        max_norm = t
-                        imin = i
+        cur_x = 0
+        found_min = (None, np.uint64(-1))
+        for i, curvesize in enumerate(self.shapes):
+            cur_view = self.line.pos[cur_x:cur_x + curvesize][rx-rbx:rx+rbx]
+            cur_view = cur_view[cur_view[:,1] > (y1 - bounding_y)]
+            cur_view = cur_view[cur_view[:,1] < (y1 + bounding_y)]
+            if cur_view.size != 0:
+                norms = np.apply_along_axis(normf, 1, cur_view)
+                if norms.size != 0:
+                    min_norm = norms.min()
+                    if min_norm < found_min[1]:
+                        found_min = i, min_norm
+            cur_x += curvesize
 
         # this is the index of the closest line
         # or None if there are no point in the
         # defined area
-        return imin
+        return found_min[0]
 
     def on_key_press(self, event):
         if event.key == "Control":
@@ -215,8 +239,10 @@ class plot:
         :param curve_no: The curve identifier to apply the offset
         :param offset: The displacement to apply to the curve.
         """
-        self.line.pos[curve_no][:, 0] += offset[0]
-        self.line.pos[curve_no][:, 1] += offset[1]
+        curve_offs = self._find_nth_curve_start(curve_no)
+        size = self.shapes[curve_no]
+        self.line.pos[curve_offs:curve_offs+size][:, 0] += offset[0]
+        self.line.pos[curve_offs:curve_offs+size][:, 1] += offset[1]
         self.line.set_data(pos=self.line.pos)
         curve_offset = self.lines_offset.get(curve_no, [0.0, 0.0])
         self.lines_offset[curve_no] = [
@@ -291,15 +317,18 @@ class plot:
     def _find_label_from_curve_index(self, curve_index):
         return list(map(lambda x: x[0], self.hl_labels)).index(curve_index)
 
+    def _find_nth_curve_start(self, n):
+        return sum(self.shapes[:n])
+
     def _set_curve_color(self, n, new_color):
-        _, S = self.shape_
-        a = n * S
-        self.colors[a : a + S] = np.repeat(new_color.rgb, S, axis=0)
+        size = self.shapes[n]
+        x = self._find_nth_curve_start(n)
+        self.colors[x : x + size] = np.repeat(new_color.rgb, size, axis=0)
 
     def _restore_nth_curve_color(self, n):
-        _, S = self.shape_
-        nnx = n * S
-        self.colors[nnx : nnx + S] = np.repeat([self.backup_colors[n]], S, axis=0)
+        size = self.shapes[n]
+        x = self._find_nth_curve_start(n)
+        self.colors[x : x + size] = np.repeat([self.backup_colors[n]], size, axis=0)
 
     def single_select(self, curve_index):
         # Unselect previously highlighted curves
@@ -330,7 +359,6 @@ class plot:
             self._restore_nth_curve_color(curve_index)
             self.selected_lines.remove(curve_index)
         else:
-            N, S = self.shape_
             new_color = next(self.hl_colorset)
             self._add_label(curve_index, new_color)
             self.selected_lines.append(curve_index)
@@ -349,7 +377,7 @@ class plot:
 
     def add_horizontal_band(self, y0: float, y1: float) -> scene.visuals.Polygon:
         """Add a horizontal band (rectangle) covering 'y0' to 'y1' on the canvas."""
-        _, size = self.shape_
+        size = max(self.shapes)
         coords = [(0, y0), (0, y1), (size, y1), (size, y0)]
         return scene.visuals.Polygon(
             coords, color=color.Color("#ddd", alpha=0.1), parent=self.view.scene
@@ -368,8 +396,8 @@ class plot:
 if __name__ == "__main__":
     N = 50
     a = [
-        i / 10 * np.sin(np.linspace(0.0 + i / 10, 10.0 + i / 10, num=2000))
-        for i in range(N)
+        i / 10 * np.sin(np.linspace(0.0 + i / 10, 10.0 + i / 10, num=i*1000))
+        for i in range(1,N)
     ]
     v = plot(a, dontrun=True)
     v.multiple_select(4)
