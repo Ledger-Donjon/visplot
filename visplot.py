@@ -1,8 +1,8 @@
 from itertools import cycle
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
+
 import numpy as np
-from vispy import scene
-from vispy import color
+from vispy import color, scene
 
 
 class plot:
@@ -17,7 +17,12 @@ class plot:
     LBL_SPACING = 16
 
     def __init__(
-        self, curves=None, labels=None, bgcolor=BG_DARK, parent=None, dontrun=False
+        self,
+        curves: Optional[Union[list[np.ndarray], np.ndarray]] = None,
+        labels: Optional[list[str]] = None,
+        bgcolor: str = BG_DARK,
+        parent=None,
+        dontrun: bool = False,
     ):
         """
         :param icurves: input curve or list of curves
@@ -71,19 +76,26 @@ class plot:
         self.selected_lines = []
         self.hl_labels = []
 
-    def draw_curves(self, curves_, labels=None, clrmap="husl"):
-        if isinstance(curves_[0], int):
+    def draw_curves(
+        self,
+        curves: Union[list[np.ndarray], np.ndarray],
+        labels: Optional[list[str]] = None,
+        clrmap: str = "husl",
+    ):
+        if not isinstance(curves, list) or (
+            isinstance(curves, np.ndarray) and curves.ndim == 1
+        ):
             # assume single curve
-            curves_ = [curves_]
+            curves = [curves]
 
         # keep an array of lengths
-        self.shapes = [len(curve) for curve in curves_]
+        self.shapes = [len(curve) for curve in curves]
 
         # the Line visual requires a vector of X,Y coordinates
         flat_curves = np.empty((0, 2))
-        min_len = len(curves_[0])
+        min_len = len(curves[0])
         max_len = 0
-        for curve_py in curves_:
+        for curve_py in curves:
             curve = np.dstack((np.arange(len(curve_py)), np.array(curve_py)))[0]
             length = len(curve)
             if length < min_len:
@@ -93,10 +105,10 @@ class plot:
             flat_curves = np.concatenate((flat_curves, curve))
 
         if labels is not None:
-            assert len(labels) == len(curves_)
+            assert len(labels) == len(curves)
             self.labels = labels
         else:
-            self.labels = [f"0x{i:x}" for i in range(len(curves_))]
+            self.labels = [f"0x{i:x}" for i in range(len(curves))]
 
         # Specify which points are connected
         # Start by connecting each point to its successor
@@ -106,13 +118,13 @@ class plot:
 
         # Prevent vispy from drawing a line between the last point
         # of a curve and the first point of the next curve
-        cur_x = len(curves_[0])
-        for curve in curves_[1:]:
+        cur_x = len(curves[0])
+        for curve in curves[1:]:
             connect[cur_x - 1, 1] = cur_x - 1
             cur_x += len(curve)
         connect[-1, 1] = flat_curves.shape[0] - 1
 
-        nb_traces = len(curves_)
+        nb_traces = len(curves)
         total_size = len(flat_curves)
         self.colors = np.ones((total_size, 3), dtype=np.float32)
         self.backup_colors = np.ones((nb_traces, 3), dtype=np.float32)
@@ -153,7 +165,7 @@ class plot:
     def run(self):
         self.canvas.app.run()
 
-    def find_closest_line(self, x, y):
+    def find_closest_line(self, x: int, y: int) -> int:
         # set bounding box where the points will be searched to be
         # at most 1/ratio of the visible area
         # XXX: cons: behaviour changes depending on the window size
@@ -287,7 +299,7 @@ class plot:
         else:
             self.single_select(closest_line)
 
-    def _add_label(self, curve_index, new_color):
+    def _add_label(self, curve_index: int, new_color: str):
         new_label = scene.Text(
             f"{self.labels[curve_index]}",
             color=new_color,
@@ -300,7 +312,7 @@ class plot:
         )
         self.hl_labels.append((curve_index, new_label))
 
-    def _del_label_from_curve_index(self, curve_index):
+    def _del_label_from_curve_index(self, curve_index: int):
         idx = self._find_label_from_curve_index(curve_index)
         self.hl_labels[idx][1].parent = None
         del self.hl_labels[idx]
@@ -312,23 +324,23 @@ class plot:
                 self.LBL_POS_DEFAULTY + self.LBL_SPACING * (idx + i),
             )
 
-    def _find_label_from_curve_index(self, curve_index):
+    def _find_label_from_curve_index(self, curve_index: int) -> int:
         return list(map(lambda x: x[0], self.hl_labels)).index(curve_index)
 
-    def _find_nth_curve_start(self, n):
+    def _find_nth_curve_start(self, n: int) -> int:
         return sum(self.shapes[:n])
 
-    def _set_curve_color(self, n, new_color):
+    def _set_curve_color(self, n: int, new_color):
         size = self.shapes[n]
         x = self._find_nth_curve_start(n)
         self.colors[x : x + size] = np.repeat(new_color.rgb, size, axis=0)
 
-    def _restore_nth_curve_color(self, n):
+    def _restore_nth_curve_color(self, n: int):
         size = self.shapes[n]
         x = self._find_nth_curve_start(n)
         self.colors[x : x + size] = np.repeat([self.backup_colors[n]], size, axis=0)
 
-    def single_select(self, curve_index):
+    def single_select(self, curve_index: int):
         # Unselect previously highlighted curves
         for line in self.selected_lines:
             self._restore_nth_curve_color(line)
@@ -347,7 +359,7 @@ class plot:
 
         self.line.set_data(color=self.colors)  # Update colors
 
-    def multiple_select(self, curve_index):
+    def multiple_select(self, curve_index: int):
         if curve_index in self.selected_lines:
             # Clicked on already selected curve
             # so we cancel selection
