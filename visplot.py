@@ -1,8 +1,16 @@
+from collections import deque
+from dataclasses import dataclass
 from itertools import cycle
 from typing import Optional, Tuple, Union
 
 import numpy as np
 from vispy import color, scene
+
+
+@dataclass
+class MoveCurveAction:
+    curve_indices: list[int]
+    offset: tuple[float, float]
 
 
 class plot:
@@ -15,6 +23,7 @@ class plot:
     LBL_POS_DEFAULTX = 170
     LBL_POS_DEFAULTY = 40
     LBL_SPACING = 16
+    ACTION_HISTORY_SIZE = 20
 
     def __init__(
         self,
@@ -69,6 +78,9 @@ class plot:
         self.canvas.show()
         if parent is None and dontrun is False:
             self.canvas.app.run()
+
+        self.action_history = deque([], self.ACTION_HISTORY_SIZE)
+        self.move_curve_in_progress = None
 
     def clear(self):
         if self.line is not None:
@@ -214,12 +226,23 @@ class plot:
             self._init_pos = None
         if event.key == "Alt":
             self.alt_pressed = True
+        if event.key == "z":
+            if self.ctrl_pressed and len(self.action_history) != 0:
+                # For now there is a single type of action
+                move_action = self.action_history.pop()
+                for curve_index in move_action.curve_indices:
+                    self.apply_offset(
+                        curve_index, (-move_action.offset[0], -move_action.offset[1])
+                    )
 
     def on_key_release(self, event):
         if event.key == "Control":
             self.ctrl_pressed = False
         if event.key == "Shift":
             self.shift_pressed = False
+            if self.move_curve_in_progress is not None:
+                self.action_history.append(self.move_curve_in_progress)
+                self.move_curve_in_progress = None
         if event.key == "Alt":
             self.alt_pressed = False
 
@@ -272,10 +295,20 @@ class plot:
                 init_x, init_y, _, _ = tr.map(self._init_pos)
                 delta_x = x - init_x
                 delta_y = y - init_y
+
+                offset = (0.0, delta_y) if self.alt_pressed else (delta_x, 0.0)
                 for curve_no in self.selected_lines:
-                    self.apply_offset(
-                        curve_no, (0.0, delta_y) if self.alt_pressed else (delta_x, 0.0)
+                    self.apply_offset(curve_no, offset)
+
+                if self.move_curve_in_progress is None:
+                    self.move_curve_in_progress = MoveCurveAction(
+                        self.selected_lines, (0.0, 0.0)
                     )
+                self.move_curve_in_progress.offset = (
+                    self.move_curve_in_progress.offset[0] + offset[0],
+                    self.move_curve_in_progress.offset[1] + offset[1],
+                )
+
                 self._init_pos = event.pos
                 self.canvas.update()
 
