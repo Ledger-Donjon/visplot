@@ -80,7 +80,7 @@ class plot:
         self.shapes = [len(curve) for curve in curves_]
 
         # the Line visual requires a vector of X,Y coordinates
-        flat_curves = np.empty((0,2))
+        flat_curves = np.empty((0, 2))
         min_len = len(curves_[0])
         max_len = 0
         for curve_py in curves_:
@@ -110,7 +110,7 @@ class plot:
         for curve in curves_[1:]:
             connect[cur_x - 1, 1] = cur_x - 1
             cur_x += len(curve)
-        connect[-1, 1] = flat_curves.shape[0] -1
+        connect[-1, 1] = flat_curves.shape[0] - 1
 
         nb_traces = len(curves_)
         total_size = len(flat_curves)
@@ -122,8 +122,8 @@ class plot:
         B_p = np.linspace(0.5, 0.3, num=nb_traces)
 
         cur_x = 0
-        for i,size in enumerate(self.shapes):
-            cslice = slice(cur_x,cur_x+size)
+        for i, size in enumerate(self.shapes):
+            cslice = slice(cur_x, cur_x + size)
             self.colors[cslice, 0] = R_p[i]
             self.colors[cslice, 1] = G_p[i]
             self.colors[cslice, 2] = B_p[i]
@@ -135,10 +135,7 @@ class plot:
             cur_x += size
 
         self.line = scene.Line(
-            pos=flat_curves,
-            color=self.colors,
-            parent=self.view.scene,
-            connect=connect
+            pos=flat_curves, color=self.colors, parent=self.view.scene, connect=connect
         )
 
         self.selected_lines = []
@@ -149,7 +146,9 @@ class plot:
             color.get_colormap(clrmap)[np.linspace(0.0, 1.0, self.MAX_HL)]
         )
 
-        self.view.camera.set_range(x=(-1, max_len), y=(flat_curves[:,1].min(), flat_curves[:,1].max()))
+        self.view.camera.set_range(
+            x=(-1, max_len), y=(flat_curves[:, 1].min(), flat_curves[:, 1].max())
+        )
 
     def run(self):
         self.canvas.app.run()
@@ -159,7 +158,7 @@ class plot:
         # at most 1/ratio of the visible area
         # XXX: cons: behaviour changes depending on the window size
         ratio = 20
-        camera_state = self.view.camera.get_state()['rect']
+        camera_state = self.view.camera.get_state()["rect"]
         bounding_x = camera_state.width / ratio
         bounding_y = camera_state.height / ratio
 
@@ -179,9 +178,9 @@ class plot:
         cur_x = 0
         found_min = (None, np.uint64(-1))
         for i, curvesize in enumerate(self.shapes):
-            cur_view = self.line.pos[cur_x:cur_x + curvesize][rx-rbx:rx+rbx]
-            cur_view = cur_view[cur_view[:,1] > (y1 - bounding_y)]
-            cur_view = cur_view[cur_view[:,1] < (y1 + bounding_y)]
+            cur_view = self.line.pos[cur_x : cur_x + curvesize][rx - rbx : rx + rbx]
+            cur_view = cur_view[cur_view[:, 1] > (y1 - bounding_y)]
+            cur_view = cur_view[cur_view[:, 1] < (y1 + bounding_y)]
             if cur_view.size != 0:
                 norms = np.apply_along_axis(normf, 1, cur_view)
                 if norms.size != 0:
@@ -241,8 +240,8 @@ class plot:
         """
         curve_offs = self._find_nth_curve_start(curve_no)
         size = self.shapes[curve_no]
-        self.line.pos[curve_offs:curve_offs+size][:, 0] += offset[0]
-        self.line.pos[curve_offs:curve_offs+size][:, 1] += offset[1]
+        self.line.pos[curve_offs : curve_offs + size][:, 0] += offset[0]
+        self.line.pos[curve_offs : curve_offs + size][:, 1] += offset[1]
         self.line.set_data(pos=self.line.pos)
         curve_offset = self.lines_offset.get(curve_no, [0.0, 0.0])
         self.lines_offset[curve_no] = [
@@ -308,10 +307,9 @@ class plot:
 
         ## redraw text items
         for i, lbl in enumerate(self.hl_labels[idx:]):
-            lbl[
-                1
-            ].pos = self.LBL_POS_DEFAULTX, self.LBL_POS_DEFAULTY + self.LBL_SPACING * (
-                idx + i
+            lbl[1].pos = (
+                self.LBL_POS_DEFAULTX,
+                self.LBL_POS_DEFAULTY + self.LBL_SPACING * (idx + i),
             )
 
     def _find_label_from_curve_index(self, curve_index):
@@ -396,8 +394,8 @@ class plot:
 if __name__ == "__main__":
     N = 50
     a = [
-        i / 10 * np.sin(np.linspace(0.0 + i / 10, 10.0 + i / 10, num=i*1000))
-        for i in range(1,N)
+        i / 10 * np.sin(np.linspace(0.0 + i / 10, 10.0 + i / 10, num=i * 1000))
+        for i in range(1, N)
     ]
     v = plot(a, dontrun=True)
     v.multiple_select(4)
