@@ -200,7 +200,7 @@ class plot:
         # y-coordinate is outside the bounding box around
         # the clicked point
         cur_x = 0
-        found_min = (None, np.uint64(-1))
+        found_min = (None, np.uint64(2**64 - 1))
         for i, curvesize in enumerate(self.shapes):
             cur_view = self.line.pos[cur_x : cur_x + curvesize][rx - rbx : rx + rbx]
             cur_view = cur_view[cur_view[:, 1] > (y1 - bounding_y)]
