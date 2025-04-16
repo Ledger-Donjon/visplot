@@ -94,10 +94,11 @@ class plot:
         labels: Optional[list[str]] = None,
         clrmap: str = "husl",
     ):
-        if not isinstance(curves, list) or (
-            isinstance(curves, np.ndarray) and curves.ndim == 1
-        ):
-            # assume single curve
+        # cases where a single array needs to be drawn
+        if isinstance(curves, list):
+            if not (isinstance(curves[0], list) or isinstance(curves[0], np.ndarray)):
+                curves = [curves]
+        elif isinstance(curves, np.ndarray) and curves.ndim == 1:
             curves = [curves]
 
         # keep an array of lengths
