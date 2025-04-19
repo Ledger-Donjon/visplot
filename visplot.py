@@ -184,7 +184,7 @@ class plot:
         # XXX: cons: behaviour changes depending on the window size
         ratio = 20
         camera_state = self.view.camera.get_state()["rect"]
-        bounding_x = camera_state.width / ratio
+        bounding_x = max(1., camera_state.width / ratio)
         bounding_y = camera_state.height / ratio
 
         tr = self.canvas.scene.node_transform(self.view.scene)
