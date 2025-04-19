@@ -13,4 +13,4 @@ Selection is done with a click. Multiple traces can be selected by holding _CTRL
 
 (the demo below runs at 60 FPS)
 
-![demo.gif](demo.gif)
+![demo.gif](https://yhql.github.io/assets/visplot_demo.gif)
